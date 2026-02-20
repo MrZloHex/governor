@@ -27,6 +27,7 @@ func main() {
 	url := cli.StringP("url", "u", "ws://localhost:8092", "Url of hub")
 	logLevel := cli.StringP("log", "l", "info", "Log level")
 	schedulePath := cli.StringP("schedule", "s", "weekly_schedule.csv", "Path to weekly schedule CSV")
+	eventsPath := cli.StringP("events", "e", "events.json", "Path to events persistence file")
 	cli.Parse()
 
 	log.SetDefault(log.New(tint.NewHandler(os.Stdout, &tint.Options{
@@ -37,9 +38,9 @@ func main() {
 		proto.WithReconnect(5*time.Second),
 	)
 
-	gov, err := governor.New(client, *schedulePath)
+	gov, err := governor.New(client, *schedulePath, *eventsPath)
 	if err != nil {
-		log.Error("Failed to load schedule", "path", *schedulePath, "err", err)
+		log.Error("Failed to init governor", "err", err)
 		os.Exit(1)
 	}
 

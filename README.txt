@@ -28,6 +28,7 @@
   ▓ FEATURES  
   ▪ Static weekly schedule from CSV (weekday, start, end, title, location, tags)  
   ▪ GET schedule by weekday (colon-safe wire format)  
+  ▪ Events: add, list, get by id, remove; persisted to JSON file across restarts  
   ▪ Uptime reporting  
   ▪ Ping/pong health check  
   ▪ Auto-reconnect on WebSocket disconnect  
@@ -43,6 +44,7 @@
   Flags:  
   ▪ `-u`  WebSocket hub URL  (default: ws://localhost:8092)  
   ▪ `-s`  Path to weekly schedule CSV  (default: weekly_schedule.csv)  
+  ▪ `-e`  Path to events persistence file (JSON)  (default: events.json)  
   ▪ `-l`  Log level: debug, info, warn, error  (default: info)  
 
   ───────────────────────────────────────────────────────────────  
@@ -54,15 +56,27 @@
   ─── PING ───  
   PING:PING                        -> PONG:PONG  
 
+  ─── NEW ───  
+  NEW:EVENT:<title>:<date>:<time>[:location][:notes]  -> OK:EVENT:<id>  
+  Date YYYY.MM.DD, time HH.MM or HH.MM.SS (local).  
+
+  ─── STOP ───  
+  STOP:EVENT:<id>                  -> OK:EVENT:<id>  or  ERR:NAC  
+
   ─── GET ───  
   GET:UPTIME                       -> OK:UPTIME:<duration>  
   GET:SCHEDULE:<weekday>           -> OK:SCHEDULE[:<slot>...]  
+  GET:EVENTS                       -> OK:EVENTS[:<event>...]  
+  GET:EVENT:<id>                   -> OK:EVENT:<wire>  or  ERR:NAC  
 
   Weekday: Mon, Tue, Wed, Thu, Fri, Sat (case-insensitive).  
 
   Slot format (one arg per slot; colons replaced by dots for wire safety):  
   <Weekday>|<Start>|<End>|<Title>|<Location>|<Tags>  
   e.g.  Mon|10.45|12.10|ТФКП|Б.Хим|Lecture;Math  
+
+  Event format (one arg):  <id>|<title>|<at>|<location>|<notes>  
+  at = YYYY.MM.DD.HH.MM (colon-safe).  
 
   ───────────────────────────────────────────────────────────────  
   ▓ FINAL WORDS  
