@@ -1,0 +1,26 @@
+weekday,start,end,title,location,tags
+Mon,10:45,12:10,ТФКП,Б.Хим,Lecture;Math
+Mon,17:05,18:30,Машинное обучение,Б.Хим,Lecture;ATP
+Mon,18:35,20:00,Машинное обучение,Б.Хим,Seminar;ATP
+
+Tue,13:55,15:20,Китайский язык,НК,Seminar;FL
+Tue,10:45,12:10,Математическая статистика,ГК 230,Seminar;DM
+Tue,15:30,16:55,Компьютерные Сети,UNK,Seminar;ATP
+Tue,17:05,18:30,ФИЯТ,КПМ 802,Seminar;ATP
+Tue,18:35,20:00,Компьютерные Сети,UNK,Lecture;ATP
+ 
+Wed,12:20,13:45,Функциальный анализ,ГК 415,Seminar;Math
+Wed,13:55,15:20,ТФКП,ГК 522,Seminar;Math
+Wed,17:05,18:30,Unity,UNK,Lecture;ATP
+Wed,18:35,20:00,Unity,UNK,Seminar;ATP
+
+Thu,09:00,10:25,ФИЯТ,Б.Хим,Lecture;ATP
+Thu,13:55,15:20,Китайский язык,НК,Seminar;FL
+Thu,17:05,18:30,ШМП,UNK,Lecture;Practic
+Thu,18:35,20:00,ШМП,UNK,Seminar;Practic
+
+Fri,10:45,12:10,Функциальный анализ,КПМ 115,Lecture;Math
+Fri,15:30,16:55,Математическая статистика,КПМ 115,Lecture;DM
+
+Sat,17:05,18:30,Практикум по матстатам,ГК 113,Lecture;DM
+
