@@ -7,7 +7,6 @@ import (
 	"strings"
 )
 
-// Slot is one weekly schedule entry (weekday + start/end time, title, location, tags).
 type Slot struct {
 	Weekday  string // Mon, Tue, ...
 	Start    string // 10:45
@@ -17,15 +16,11 @@ type Slot struct {
 	Tags     string
 }
 
-// slotSep is used to join slot fields in wire format (avoids colon in protocol).
 const slotSep = "|"
 
-// noColon replaces colons so the string is safe in protocol (wire uses ":" as separator).
 func noColon(s string) string { return strings.ReplaceAll(s, ":", ".") }
 
-// WireString encodes the slot for protocol reply. All fields are colon-safe so the
-// message can be split on ":". Format: Weekday|Start|End|Title|Location|Tags
-// (times e.g. 10.45 instead of 10:45).
+// Format: Weekday|Start|End|Title|Location|Tags
 func (s Slot) WireString() string {
 	return strings.Join([]string{
 		noColon(s.Weekday), noColon(s.Start), noColon(s.End),
@@ -33,9 +28,6 @@ func (s Slot) WireString() string {
 	}, slotSep)
 }
 
-// LoadScheduleFromCSV reads a weekly schedule from a CSV file.
-// CSV header: weekday,start,end,title,location,tags
-// Empty rows and rows with empty title are skipped.
 func LoadScheduleFromCSV(path string) ([]Slot, error) {
 	f, err := os.Open(path)
 	if err != nil {

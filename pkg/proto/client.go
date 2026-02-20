@@ -11,8 +11,6 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// HandlerFunc processes an incoming message addressed to this node.
-// Use req.Reply() to send a response back through the concentrator.
 type HandlerFunc func(req *Request)
 
 type Option func(*Client)
@@ -29,16 +27,10 @@ func WithDialTimeout(d time.Duration) Option {
 	return func(c *Client) { c.dialTimeout = d }
 }
 
-// WithOnConnect sets a callback that fires after every successful connection
-// (including reconnects). Useful for re-announcing state to the concentrator.
 func WithOnConnect(fn func(*Client)) Option {
 	return func(c *Client) { c.onConnect = fn }
 }
 
-// WithInbox enables an inbox channel of the given buffer size.
-// Every incoming message is pushed there (non-blocking drop on full).
-// Read it with Inbox(). This is the integration point for event-loop
-// consumers like Bubble Tea — no need to register Handle() callbacks.
 func WithInbox(size int) Option {
 	return func(c *Client) { c.inbox = make(chan Message, size) }
 }
@@ -67,8 +59,6 @@ type Client struct {
 	wg   sync.WaitGroup
 }
 
-// New creates a concentrator client.
-//
 //	c := concentrator.New("LUCH", "ws://hal9000:9090/ws")
 func New(nodeID, url string, opts ...Option) *Client {
 	c := &Client{
@@ -88,7 +78,6 @@ func New(nodeID, url string, opts ...Option) *Client {
 
 func (c *Client) NodeID() string { return c.nodeID }
 
-// Connected reports whether the WebSocket connection is currently alive.
 func (c *Client) Connected() bool {
 	c.connMu.Lock()
 	ok := c.conn != nil
@@ -116,8 +105,6 @@ func (c *Client) Handle(verb string, fn HandlerFunc) {
 	c.handlerMu.Unlock()
 }
 
-// Connect dials the concentrator and starts the read loop.
-// Blocks until the first successful connection or ctx cancellation.
 func (c *Client) Connect(ctx context.Context) error {
 	if err := c.dial(ctx); err != nil {
 		return fmt.Errorf("initial connection: %w", err)
@@ -127,7 +114,6 @@ func (c *Client) Connect(ctx context.Context) error {
 	return nil
 }
 
-// Close shuts down the client and waits for goroutines to exit.
 func (c *Client) Close() error {
 	close(c.done)
 	c.connMu.Lock()

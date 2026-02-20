@@ -8,11 +8,14 @@ import (
 	"governor/pkg/proto"
 )
 
+const DefaultDeadlinePeriod = 7 * 24 * time.Hour
+
 type Governor struct {
-	client   *proto.Client
-	bootedAt time.Time
-	schedule []Slot
-	events   *eventStore
+	client         *proto.Client
+	bootedAt       time.Time
+	schedule       []Slot
+	events         *eventStore
+	deadlinePeriod time.Duration
 }
 
 func New(client *proto.Client, schedulePath, eventsPath string) (*Governor, error) {
@@ -20,11 +23,14 @@ func New(client *proto.Client, schedulePath, eventsPath string) (*Governor, erro
 	if err != nil {
 		return nil, err
 	}
+
 	g := &Governor{
-		client:   client,
-		bootedAt: time.Now(),
-		events:   events,
+		client:         client,
+		bootedAt:       time.Now(),
+		events:         events,
+		deadlinePeriod: DefaultDeadlinePeriod,
 	}
+
 	if schedulePath != "" {
 		slots, err := LoadScheduleFromCSV(schedulePath)
 		if err != nil {
@@ -33,7 +39,14 @@ func New(client *proto.Client, schedulePath, eventsPath string) (*Governor, erro
 		g.schedule = slots
 		log.Debug("schedule loaded", "path", schedulePath, "slots", len(slots))
 	}
+
 	return g, nil
+}
+
+func (g *Governor) reply(req *proto.Request, verb, noun string, args ...string) {
+	if err := req.Reply(verb, noun, args...); err != nil {
+		log.Warn("reply failed", "to", req.Msg.From, "verb", verb, "noun", noun, "err", err)
+	}
 }
 
 // Cmd dispatches an incoming request by verb.
@@ -43,8 +56,9 @@ func New(client *proto.Client, schedulePath, eventsPath string) (*Governor, erro
 //	STOP EVENT  -> OK EVENT <id> | ERR NAC
 //	GET  UPTIME -> OK UPTIME <dur>
 //	GET  SCHEDULE <weekday> -> OK SCHEDULE [<slot>...]
-//	GET  EVENTS  -> OK EVENTS [<event>...]
+//	GET  EVENTS     -> OK EVENTS [<event>...]
 //	GET  EVENT <id> -> OK EVENT <wire> | ERR NAC
+//	GET  DEADLINES [day|week|month] -> OK DEADLINES [<event>...]  (no arg: configured period; else calendar window)
 func (g *Governor) Cmd(req *proto.Request) {
 	msg := req.Msg
 	log.Debug("CMD", "from", msg.From, "verb", msg.Verb, "noun", msg.Noun, "args", msg.Args)
@@ -54,7 +68,7 @@ func (g *Governor) Cmd(req *proto.Request) {
 		log.Debug("IGNORE", "verb", msg.Verb, "noun", msg.Noun, "from", msg.From)
 		return
 	case "PING":
-		req.Reply("PONG", "PONG")
+		g.reply(req, "PONG", "PONG")
 	case "NEW":
 		g.cmdNew(req)
 	case "STOP":
@@ -63,7 +77,7 @@ func (g *Governor) Cmd(req *proto.Request) {
 		g.cmdGet(req)
 	default:
 		log.Warn("UNKNOWN VERB", "verb", msg.Verb, "from", msg.From)
-		req.Reply("ERR", "VERB")
+		g.reply(req, "ERR", "VERB")
 	}
 }
 
@@ -73,11 +87,11 @@ func (g *Governor) cmdGet(req *proto.Request) {
 	case "UPTIME":
 		uptime := time.Since(g.bootedAt).Truncate(time.Second)
 		log.Debug("GET UPTIME", "uptime", uptime, "from", msg.From)
-		req.Reply("OK", "UPTIME", uptime.String())
+		g.reply(req, "OK", "UPTIME", uptime.String())
 
 	case "SCHEDULE":
 		if len(msg.Args) < 1 {
-			req.Reply("ERR", "ARGC")
+			g.reply(req, "ERR", "ARGC")
 			return
 		}
 		weekday := strings.TrimSpace(msg.Args[0])
@@ -88,7 +102,7 @@ func (g *Governor) cmdGet(req *proto.Request) {
 			}
 		}
 		log.Debug("GET SCHEDULE", "weekday", weekday, "slots", len(slots), "from", msg.From)
-		req.Reply("OK", "SCHEDULE", slots...)
+		g.reply(req, "OK", "SCHEDULE", slots...)
 
 	case "EVENTS":
 		all := g.events.List()
@@ -97,25 +111,58 @@ func (g *Governor) cmdGet(req *proto.Request) {
 			args[i] = all[i].WireString()
 		}
 		log.Debug("GET EVENTS", "count", len(args), "from", msg.From)
-		req.Reply("OK", "EVENTS", args...)
+		g.reply(req, "OK", "EVENTS", args...)
 
 	case "EVENT":
 		if len(msg.Args) < 1 {
-			req.Reply("ERR", "ARGC")
+			g.reply(req, "ERR", "ARGC")
 			return
 		}
 		id := strings.TrimSpace(msg.Args[0])
 		e, ok := g.events.Get(id)
 		if !ok {
-			req.Reply("ERR", "NAC")
+			g.reply(req, "ERR", "NAC")
 			return
 		}
 		log.Debug("GET EVENT", "id", id, "from", msg.From)
-		req.Reply("OK", "EVENT", e.WireString())
+		g.reply(req, "OK", "EVENT", e.WireString())
+
+	case "DEADLINES":
+		all := g.events.List()
+		var args []string
+
+		if len(msg.Args) >= 1 {
+			// Specific calendar window: GET:DEADLINES:DAY|WEEK|MONTH|YEAR
+			start, end := periodBounds(msg.Args[0])
+			if start.IsZero() && end.IsZero() {
+				log.Warn("GET DEADLINES unknown period", "period", msg.Args[0], "from", msg.From)
+				g.reply(req, "ERR", "PERIOD")
+				return
+			}
+			for i := range all {
+				at := all[i].At
+				if !at.Before(start) && !at.After(end) {
+					args = append(args, all[i].WireString())
+				}
+			}
+			log.Debug("GET DEADLINES", "window", msg.Args[0], "start", start.Format("2006-01-02"), "end", end.Format("2006-01-02"), "count", len(args), "from", msg.From)
+		} else {
+			// Configured lookahead: events due in [now, now+deadlinePeriod]
+			now := time.Now()
+			cutoff := now.Add(g.deadlinePeriod)
+			for i := range all {
+				at := all[i].At
+				if !at.Before(now) && !at.After(cutoff) {
+					args = append(args, all[i].WireString())
+				}
+			}
+			log.Debug("GET DEADLINES", "period", g.deadlinePeriod, "now", now.Format("2006-01-02 15:04"), "cutoff", cutoff.Format("2006-01-02 15:04"), "count", len(args), "from", msg.From)
+		}
+		g.reply(req, "OK", "DEADLINES", args...)
 
 	default:
 		log.Warn("UNKNOWN NOUN", "noun", msg.Noun, "from", msg.From)
-		req.Reply("ERR", "NOUN")
+		g.reply(req, "ERR", "NOUN")
 	}
 }
 
@@ -124,13 +171,13 @@ func (g *Governor) cmdNew(req *proto.Request) {
 	switch msg.Noun {
 	case "EVENT":
 		if len(msg.Args) < 3 {
-			req.Reply("ERR", "ARGC")
+			g.reply(req, "ERR", "ARGC")
 			return
 		}
 		title := strings.TrimSpace(msg.Args[0])
 		if title == "" {
 			log.Warn("NEW EVENT empty title", "from", msg.From)
-			req.Reply("ERR", "TITLE")
+			g.reply(req, "ERR", "TITLE")
 			return
 		}
 		dateStr := msg.Args[1]
@@ -138,7 +185,7 @@ func (g *Governor) cmdNew(req *proto.Request) {
 		at, err := ParseEventAt(dateStr, timeStr)
 		if err != nil {
 			log.Warn("BAD EVENT TIME", "date", dateStr, "time", timeStr, "from", msg.From, "err", err)
-			req.Reply("ERR", "TIME", dateStr, timeStr)
+			g.reply(req, "ERR", "TIME", dateStr, timeStr)
 			return
 		}
 		var location, notes string
@@ -152,14 +199,14 @@ func (g *Governor) cmdNew(req *proto.Request) {
 		id, err := g.events.Add(e)
 		if err != nil {
 			log.Error("NEW EVENT add failed", "title", title, "from", msg.From, "err", err)
-			req.Reply("ERR", "ADD", err.Error())
+			g.reply(req, "ERR", "ADD", err.Error())
 			return
 		}
 		log.Info("NEW EVENT", "id", id, "title", title, "at", at.Format("2006-01-02 15:04"), "from", msg.From)
-		req.Reply("OK", "EVENT", id)
+		g.reply(req, "OK", "EVENT", id)
 	default:
 		log.Warn("UNKNOWN NOUN", "noun", msg.Noun, "from", msg.From)
-		req.Reply("ERR", "NOUN")
+		g.reply(req, "ERR", "NOUN")
 	}
 }
 
@@ -168,20 +215,20 @@ func (g *Governor) cmdStop(req *proto.Request) {
 	switch msg.Noun {
 	case "EVENT":
 		if len(msg.Args) < 1 {
-			req.Reply("ERR", "ARGC")
+			g.reply(req, "ERR", "ARGC")
 			return
 		}
 		id := strings.TrimSpace(msg.Args[0])
 		if !g.events.Delete(id) {
 			log.Debug("STOP EVENT NOT FOUND", "id", id, "from", msg.From)
-			req.Reply("ERR", "NAC")
+			g.reply(req, "ERR", "NAC")
 			return
 		}
 		log.Info("STOP EVENT", "id", id, "from", msg.From)
-		req.Reply("OK", "EVENT", id)
+		g.reply(req, "OK", "EVENT", id)
 	default:
 		log.Warn("UNKNOWN NOUN", "noun", msg.Noun, "from", msg.From)
-		req.Reply("ERR", "NOUN")
+		g.reply(req, "ERR", "NOUN")
 	}
 }
 

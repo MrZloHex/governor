@@ -35,14 +35,18 @@ func (s *eventStore) Load() error {
 		if os.IsNotExist(err) {
 			return nil
 		}
-		return err
+		return fmt.Errorf("read events file %s: %w", s.path, err)
 	}
 	var list []Event
 	if err := json.Unmarshal(data, &list); err != nil {
-		return err
+		return fmt.Errorf("parse events file %s: %w", s.path, err)
 	}
 	for i := range list {
 		e := &list[i]
+		if e.ID == "" {
+			slog.Warn("events load: skipping entry with empty ID", "path", s.path, "title", e.Title)
+			continue
+		}
 		s.byID[e.ID] = e
 		if n := parseEventID(e.ID); n >= s.nextID {
 			s.nextID = n + 1
@@ -72,9 +76,12 @@ func (s *eventStore) Save() error {
 	s.mu.RUnlock()
 	data, err := json.MarshalIndent(list, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal events: %w", err)
 	}
-	return os.WriteFile(s.path, data, 0644)
+	if err := os.WriteFile(s.path, data, 0644); err != nil {
+		return fmt.Errorf("write events file %s: %w", s.path, err)
+	}
+	return nil
 }
 
 func (s *eventStore) Add(e Event) (string, error) {

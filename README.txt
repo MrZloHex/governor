@@ -68,8 +68,9 @@
   GET:SCHEDULE:<weekday>           -> OK:SCHEDULE[:<slot>...]  
   GET:EVENTS                       -> OK:EVENTS[:<event>...]  
   GET:EVENT:<id>                   -> OK:EVENT:<wire>  or  ERR:NAC  
+  GET:DEADLINES[:day|month|year]   -> OK:DEADLINES[:<event>...]  
 
-  Weekday: Mon, Tue, Wed, Thu, Fri, Sat (case-insensitive).  
+  Weekday: MON, TUE, WED, THU, FRI, SAT, SUN
 
   Slot format (one arg per slot; colons replaced by dots for wire safety):  
   <Weekday>|<Start>|<End>|<Title>|<Location>|<Tags>  

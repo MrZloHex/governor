@@ -63,7 +63,6 @@ func main() {
 	<-sig
 
 	log.Info("SHUTTING DOWN")
-	gov.Shutdown()
 	client.Close()
+	gov.Shutdown()
 }
-
