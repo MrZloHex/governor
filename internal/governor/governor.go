@@ -129,10 +129,12 @@ func (g *Governor) cmdGet(req *proto.Request) {
 
 	case "DEADLINES":
 		all := g.events.List()
+		now := time.Now()
 		var args []string
 
 		if len(msg.Args) >= 1 {
 			// Specific calendar window: GET:DEADLINES:DAY|WEEK|MONTH|YEAR
+			// Include event if At is in [start,end] and now is within event's visible window [visibleStart, At]
 			start, end := periodBounds(msg.Args[0])
 			if start.IsZero() && end.IsZero() {
 				log.Warn("GET DEADLINES unknown period", "period", msg.Args[0], "from", msg.From)
@@ -140,23 +142,25 @@ func (g *Governor) cmdGet(req *proto.Request) {
 				return
 			}
 			for i := range all {
-				at := all[i].At
-				if !at.Before(start) && !at.After(end) {
-					args = append(args, all[i].WireString())
+				e := &all[i]
+				at := e.At
+				visibleStart := e.DeadlineVisibleStart()
+				if !at.Before(start) && !at.After(end) && !now.Before(visibleStart) && !now.After(at) {
+					args = append(args, e.WireString())
 				}
 			}
 			log.Debug("GET DEADLINES", "window", msg.Args[0], "start", start.Format("2006-01-02"), "end", end.Format("2006-01-02"), "count", len(args), "from", msg.From)
 		} else {
-			// Configured lookahead: events due in [now, now+deadlinePeriod]
-			now := time.Now()
-			cutoff := now.Add(g.deadlinePeriod)
+			// No window arg: return events that are currently in their visible window (visibleStart <= now <= At).
+			// Default visibleStart = At - 7 days; can be overridden per event via VisibleFrom.
 			for i := range all {
-				at := all[i].At
-				if !at.Before(now) && !at.After(cutoff) {
-					args = append(args, all[i].WireString())
+				e := &all[i]
+				visibleStart := e.DeadlineVisibleStart()
+				if !now.Before(visibleStart) && !now.After(e.At) {
+					args = append(args, e.WireString())
 				}
 			}
-			log.Debug("GET DEADLINES", "period", g.deadlinePeriod, "now", now.Format("2006-01-02 15:04"), "cutoff", cutoff.Format("2006-01-02 15:04"), "count", len(args), "from", msg.From)
+			log.Debug("GET DEADLINES", "now", now.Format("2006-01-02 15:04"), "count", len(args), "from", msg.From)
 		}
 		g.reply(req, "OK", "DEADLINES", args...)
 
@@ -195,7 +199,17 @@ func (g *Governor) cmdNew(req *proto.Request) {
 		if len(msg.Args) > 4 {
 			notes = strings.TrimSpace(msg.Args[4])
 		}
-		e := Event{Title: title, At: at, Location: location, Notes: notes}
+		var visibleFrom *time.Time
+		if len(msg.Args) > 5 {
+			vf, err := ParseVisibleFromDate(msg.Args[5])
+			if err != nil {
+				log.Warn("NEW EVENT bad visible_from", "visible_from", msg.Args[5], "from", msg.From, "err", err)
+				g.reply(req, "ERR", "VISIBLE", msg.Args[5])
+				return
+			}
+			visibleFrom = vf
+		}
+		e := Event{Title: title, At: at, Location: location, Notes: notes, VisibleFrom: visibleFrom}
 		id, err := g.events.Add(e)
 		if err != nil {
 			log.Error("NEW EVENT add failed", "title", title, "from", msg.From, "err", err)

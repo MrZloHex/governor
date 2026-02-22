@@ -20,8 +20,7 @@
   ───────────────────────────────────────────────────────────────  
   ▓ ARCHITECTURE  
   ▪ **RUNTIME**: Go 1.25  
-  ▪ **TRANSPORT**: WebSocket (gorilla/websocket) via pkg/proto client  
-  ▪ **SCHEDULE**: Static weekly CSV, loaded at startup  
+  ▪ **TRANSPORT**: WebSocket (gorilla/websocket) via pkg/proto  
   ▪ **NODE ID**: GOVERNOR  
 
   ───────────────────────────────────────────────────────────────  
@@ -57,8 +56,10 @@
   PING:PING                        -> PONG:PONG  
 
   ─── NEW ───  
-  NEW:EVENT:<title>:<date>:<time>[:location][:notes]  -> OK:EVENT:<id>  
+  NEW:EVENT:<title>:<date>:<time>[:location][:notes][:visible_from]  -> OK:EVENT:<id>  
   Date YYYY.MM.DD, time HH.MM or HH.MM.SS (local).  
+  visible_from (optional) YYYY.MM.DD = date from which this event appears in GET:DEADLINES;  
+  omit = default (event appears 7 days before deadline).  
 
   ─── STOP ───  
   STOP:EVENT:<id>                  -> OK:EVENT:<id>  or  ERR:NAC  
@@ -68,7 +69,9 @@
   GET:SCHEDULE:<weekday>           -> OK:SCHEDULE[:<slot>...]  
   GET:EVENTS                       -> OK:EVENTS[:<event>...]  
   GET:EVENT:<id>                   -> OK:EVENT:<wire>  or  ERR:NAC  
-  GET:DEADLINES[:day|month|year]   -> OK:DEADLINES[:<event>...]  
+  GET:DEADLINES[:day|week|month|year]  -> OK:DEADLINES[:<event>...]  
+  No arg: events in their visible window (visibleStart <= now <= deadline; default visibleStart = 7 days before).  
+  With period: events whose deadline falls in that calendar window and are already visible.  
 
   Weekday: MON, TUE, WED, THU, FRI, SAT, SUN
 
@@ -76,8 +79,8 @@
   <Weekday>|<Start>|<End>|<Title>|<Location>|<Tags>  
   e.g.  Mon|10.45|12.10|ТФКП|Б.Хим|Lecture;Math  
 
-  Event format (one arg):  <id>|<title>|<at>|<location>|<notes>  
-  at = YYYY.MM.DD.HH.MM (colon-safe).  
+  Event format (one arg):  <id>|<title>|<at>|<location>|<notes>|<visible_from>  
+  at = YYYY.MM.DD.HH.MM (colon-safe). visible_from = YYYY.MM.DD or empty (default 7 days before).  
 
   ───────────────────────────────────────────────────────────────  
   ▓ FINAL WORDS  
