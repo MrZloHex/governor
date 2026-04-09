@@ -2,6 +2,7 @@ package proto
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"strings"
@@ -35,9 +36,16 @@ func WithInbox(size int) Option {
 	return func(c *Client) { c.inbox = make(chan Message, size) }
 }
 
+// WithTLS sets the TLS config used for wss:// connections (client certificates for mTLS, RootCAs, etc.).
+func WithTLS(cfg *tls.Config) Option {
+	return func(c *Client) { c.tlsConfig = cfg }
+}
+
 type Client struct {
 	nodeID string
 	url    string
+
+	tlsConfig *tls.Config
 
 	reconnectInterval time.Duration
 	dialTimeout       time.Duration
@@ -153,6 +161,9 @@ func (c *Client) writeRaw(wire string) error {
 
 func (c *Client) dial(ctx context.Context) error {
 	dialer := websocket.Dialer{HandshakeTimeout: c.dialTimeout}
+	if c.tlsConfig != nil {
+		dialer.TLSClientConfig = c.tlsConfig.Clone()
+	}
 	conn, _, err := dialer.DialContext(ctx, c.url, nil)
 	if err != nil {
 		return err

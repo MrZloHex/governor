@@ -20,7 +20,7 @@
   ───────────────────────────────────────────────────────────────  
   ▓ ARCHITECTURE  
   ▪ **RUNTIME**: Go 1.25  
-  ▪ **TRANSPORT**: WebSocket (gorilla/websocket) via pkg/proto  
+  ▪ **TRANSPORT**: WebSocket (gorilla/websocket) via pkg/proto; optional **mTLS** (wss://)  
   ▪ **NODE ID**: GOVERNOR  
 
   ───────────────────────────────────────────────────────────────  
@@ -40,11 +40,30 @@
   ./bin/governor -u ws://localhost:8092 -s weekly_schedule.csv -l info  
   ```
 
-  Flags:  
-  ▪ `-u`  WebSocket hub URL  (default: ws://localhost:8092)  
-  ▪ `-s`  Path to weekly schedule CSV  (default: weekly_schedule.csv)  
-  ▪ `-e`  Path to events persistence file (JSON)  (default: events.json)  
-  ▪ `-l`  Log level: debug, info, warn, error  (default: info)  
+  ───────────────────────────────────────────────────────────────  
+  ▓ CONFIGURATION (.env)  
+  On startup, **governor** loads a `.env` file from the current working directory  
+  if it exists (`godotenv`). Missing `.env` is fine; other read errors print a  
+  warning to stderr and the process continues with the existing environment.  
+
+  Environment variables supply **defaults for flags**; CLI arguments override them.  
+
+  **Governor (cmd/governor)**  
+  ▪ `GOVERNOR_WS_URL` — default WebSocket URL (default: ws://localhost:8092)  
+  ▪ `GOVERNOR_TLS_CERT` — client certificate (PEM) for mTLS  
+  ▪ `GOVERNOR_TLS_KEY` — client private key (PEM) for mTLS  
+  ▪ `GOVERNOR_TLS_CA` — optional PEM bundle of CAs used to verify the **hub’s**  
+    TLS certificate (use when the server is not signed by a public CA)  
+
+  ───────────────────────────────────────────────────────────────  
+  ▓ FLAGS (governor)  
+  ▪ `-u` / `--url`  WebSocket hub URL  (env: `GOVERNOR_WS_URL`, default: ws://localhost:8092)  
+  ▪ `-s` / `--schedule`  Weekly schedule CSV  (default: weekly_schedule.csv)  
+  ▪ `-e` / `--events`  Events persistence file (JSON)  (default: events.json)  
+  ▪ `-l` / `--log`  Log level: debug, info, warn, error  (default: info)  
+  ▪ `--tls-cert`  Client TLS certificate (PEM); with `--tls-key` enables mTLS  (env: `GOVERNOR_TLS_CERT`)  
+  ▪ `--tls-key`   Client TLS private key (PEM)  (env: `GOVERNOR_TLS_KEY`)  
+  ▪ `--tls-ca`    Optional CA bundle to trust the hub server cert  (env: `GOVERNOR_TLS_CA`)  
 
   ───────────────────────────────────────────────────────────────  
   ▓ PROTOCOL  
