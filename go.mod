@@ -3,9 +3,12 @@ module governor
 go 1.25.5
 
 require (
-	github.com/gorilla/websocket v1.5.3
+	github.com/MrZloHex/monolink v0.1.1
 	github.com/lmittmann/tint v1.1.3
 	github.com/spf13/pflag v1.0.10
 )
 
-require github.com/joho/godotenv v1.5.1 // indirect
+require (
+	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/joho/godotenv v1.5.1
+)

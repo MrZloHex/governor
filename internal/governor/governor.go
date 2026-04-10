@@ -5,20 +5,20 @@ import (
 	"strings"
 	"time"
 
-	"governor/pkg/proto"
+	"github.com/MrZloHex/monolink"
 )
 
 const DefaultDeadlinePeriod = 7 * 24 * time.Hour
 
 type Governor struct {
-	client         *proto.Client
+	client         *monolink.Client
 	bootedAt       time.Time
 	schedule       []Slot
 	events         *eventStore
 	deadlinePeriod time.Duration
 }
 
-func New(client *proto.Client, schedulePath, eventsPath string) (*Governor, error) {
+func New(client *monolink.Client, schedulePath, eventsPath string) (*Governor, error) {
 	events, err := newEventStore(eventsPath)
 	if err != nil {
 		return nil, err
@@ -43,7 +43,7 @@ func New(client *proto.Client, schedulePath, eventsPath string) (*Governor, erro
 	return g, nil
 }
 
-func (g *Governor) reply(req *proto.Request, verb, noun string, args ...string) {
+func (g *Governor) reply(req *monolink.Request, verb, noun string, args ...string) {
 	if err := req.Reply(verb, noun, args...); err != nil {
 		log.Warn("reply failed", "to", req.Msg.From, "verb", verb, "noun", noun, "err", err)
 	}
@@ -59,7 +59,7 @@ func (g *Governor) reply(req *proto.Request, verb, noun string, args ...string) 
 //	GET  EVENTS     -> OK EVENTS [<event>...]
 //	GET  EVENT <id> -> OK EVENT <wire> | ERR NAC
 //	GET  DEADLINES [day|week|month] -> OK DEADLINES [<event>...]  (no arg: configured period; else calendar window)
-func (g *Governor) Cmd(req *proto.Request) {
+func (g *Governor) Cmd(req *monolink.Request) {
 	msg := req.Msg
 	log.Debug("CMD", "from", msg.From, "verb", msg.Verb, "noun", msg.Noun, "args", msg.Args)
 
@@ -81,7 +81,7 @@ func (g *Governor) Cmd(req *proto.Request) {
 	}
 }
 
-func (g *Governor) cmdGet(req *proto.Request) {
+func (g *Governor) cmdGet(req *monolink.Request) {
 	msg := req.Msg
 	switch msg.Noun {
 	case "UPTIME":
@@ -170,7 +170,7 @@ func (g *Governor) cmdGet(req *proto.Request) {
 	}
 }
 
-func (g *Governor) cmdNew(req *proto.Request) {
+func (g *Governor) cmdNew(req *monolink.Request) {
 	msg := req.Msg
 	switch msg.Noun {
 	case "EVENT":
@@ -224,7 +224,7 @@ func (g *Governor) cmdNew(req *proto.Request) {
 	}
 }
 
-func (g *Governor) cmdStop(req *proto.Request) {
+func (g *Governor) cmdStop(req *monolink.Request) {
 	msg := req.Msg
 	switch msg.Noun {
 	case "EVENT":

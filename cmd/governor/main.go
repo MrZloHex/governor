@@ -18,8 +18,8 @@ import (
 
 	cli "github.com/spf13/pflag"
 
+	"github.com/MrZloHex/monolink"
 	"governor/internal/governor"
-	"governor/pkg/proto"
 )
 
 var logLevelMap = map[string]log.Level{
@@ -109,8 +109,8 @@ func main() {
 	})))
 
 	hubURL := *url
-	var opts []proto.Option
-	opts = append(opts, proto.WithReconnect(5*time.Second))
+	var opts []monolink.Option
+	opts = append(opts, monolink.WithReconnect(5*time.Second))
 
 	if *tlsCert != "" || *tlsKey != "" || *tlsCA != "" {
 		if *tlsCert == "" || *tlsKey == "" {
@@ -122,12 +122,12 @@ func main() {
 			log.Error("TLS configuration failed", "err", err)
 			os.Exit(1)
 		}
-		opts = append(opts, proto.WithTLS(tlsCfg))
+		opts = append(opts, monolink.WithTLS(tlsCfg))
 		hubURL = maybeWSS(hubURL, true)
 		log.Info("connecting with mTLS", "url", hubURL, "cert", *tlsCert)
 	}
 
-	client := proto.New("GOVERNOR", hubURL, opts...)
+	client := monolink.New("GOVERNOR", hubURL, opts...)
 
 	gov, err := governor.New(client, *schedulePath, *eventsPath)
 	if err != nil {
@@ -135,7 +135,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	client.Handle("*", func(req *proto.Request) {
+	client.Handle("*", func(req *monolink.Request) {
 		if req.Msg.To != client.NodeID() {
 			return
 		}
