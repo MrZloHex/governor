@@ -54,6 +54,7 @@ func (g *Governor) reply(req *monolink.Request, verb, noun string, args ...strin
 //	PING        -> PONG PONG
 //	NEW  EVENT  -> OK EVENT <id>
 //	STOP EVENT  -> OK EVENT <id> | ERR NAC
+//	GET  AGENDA [<date>]    -> OK AGENDA <date> <weekday> [<entry>...]
 //	GET  UPTIME -> OK UPTIME <dur>
 //	GET  SCHEDULE <weekday> -> OK SCHEDULE [<slot>...]
 //	GET  EVENTS     -> OK EVENTS [<event>...]
@@ -126,6 +127,26 @@ func (g *Governor) cmdGet(req *monolink.Request) {
 		}
 		log.Debug("GET EVENT", "id", id, "from", msg.From)
 		g.reply(req, "OK", "EVENT", e.WireString())
+
+	case "AGENDA":
+		// GET:AGENDA[:<YYYY.MM.DD>] -- everything one day needs, in a
+		// single reply. Composed here rather than on the client because
+		// the intended caller is an ESP8266, where two round trips and
+		// this much string handling are expensive.
+		day := time.Now()
+		if len(msg.Args) >= 1 && strings.TrimSpace(msg.Args[0]) != "" {
+			d, err := time.ParseInLocation(agendaDateFmt, strings.TrimSpace(msg.Args[0]), time.Local)
+			if err != nil {
+				log.Warn("GET AGENDA bad date", "raw", msg.Args[0], "from", msg.From)
+				g.reply(req, "ERR", "DATE")
+				return
+			}
+			day = d
+		}
+		date, weekday, entries := g.AgendaFor(day)
+		args := append([]string{date, weekday}, entries...)
+		log.Debug("GET AGENDA", "date", date, "weekday", weekday, "entries", len(entries), "from", msg.From)
+		g.reply(req, "OK", "AGENDA", args...)
 
 	case "DEADLINES":
 		all := g.events.List()

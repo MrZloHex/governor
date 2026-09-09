@@ -92,6 +92,13 @@
 
   ─── GET ───
   `GET:UPTIME` → `OK:UPTIME:<duration>`
+  `GET:AGENDA[:<YYYY.MM.DD>]` → `OK:AGENDA:<date>:<weekday>[:<entry>...]`
+  One day in one reply: that weekday's slots in time order, then the
+  deadlines visible on that day, soonest first. Entries are
+  `CLASS|<start>|<end>|<title>|<location>` and
+  `DUE|<title>|<YYYY.MM.DD>|<days remaining>`; days remaining counts whole
+  calendar days, so an event later the same day is `0`. Composed here so a
+  constrained client (UKAZ on an ESP8266) needs one round trip, not two.
   `GET:SCHEDULE:<weekday>` → `OK:SCHEDULE[:<slot>...]`
   `GET:EVENTS` → `OK:EVENTS[:<event>...]`
   `GET:EVENT:<id>` → `OK:EVENT:<wire>` or `ERR:NAC`
