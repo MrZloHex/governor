@@ -52,7 +52,7 @@ func (g *Governor) reply(req *monolink.Request, verb, noun string, args ...strin
 
 // Cmd dispatches an incoming request by verb.
 //
-//	PING        -> PONG PONG
+//	PING        -> PONG PONG (v1) | OK PING (v2)
 //	NEW  EVENT  -> OK EVENT <id>
 //	STOP EVENT  -> OK EVENT <id> | ERR NAC
 //	GET  AGENDA [<date>]    -> OK AGENDA <date> <weekday> [<entry>...]
@@ -70,7 +70,12 @@ func (g *Governor) Cmd(req *monolink.Request) {
 		log.Debug("IGNORE", "verb", msg.Verb, "noun", msg.Noun, "from", msg.From)
 		return
 	case "PING":
-		g.reply(req, "PONG", "PONG")
+		// v2 answers OK:PING, correlated by id like any reply (SPEC §43).
+		if msg.Version == monolink.V2 {
+			g.reply(req, "OK", "PING")
+		} else {
+			g.reply(req, "PONG", "PONG")
+		}
 	case "NEW":
 		g.cmdNew(req)
 	case "STOP":

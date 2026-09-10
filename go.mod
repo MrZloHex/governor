@@ -3,7 +3,7 @@ module governor
 go 1.25.5
 
 require (
-	github.com/MrZloHex/monolink v0.1.1
+	github.com/MrZloHex/monolink v0.2.0
 	github.com/lmittmann/tint v1.1.3
 	github.com/spf13/pflag v1.0.10
 )
