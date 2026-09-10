@@ -24,7 +24,9 @@ func periodBounds(period string) (start, end time.Time) {
 		start = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local)
 		end = start.AddDate(0, 1, 0).Add(-time.Nanosecond)
 	case "year":
-		start = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local)
+		// Was starting from the first of the current month, not January,
+		// so "year" meant a rolling twelve months from the month start.
+		start = time.Date(now.Year(), time.January, 1, 0, 0, 0, 0, time.Local)
 		end = start.AddDate(1, 0, 0).Add(-time.Nanosecond)
 	}
 	return start, end

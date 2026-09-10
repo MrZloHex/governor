@@ -138,3 +138,27 @@ func TestDaysBetweenIgnoresClockTime(t *testing.T) {
 		t.Fatalf("got %d, want 1", got)
 	}
 }
+
+func TestPeriodBoundsYearIsCalendarYear(t *testing.T) {
+	start, end := periodBounds("year")
+	if start.Month() != time.January || start.Day() != 1 {
+		t.Errorf("year should start on 1 January, got %v", start)
+	}
+	if end.Year() != start.Year() || end.Month() != time.December {
+		t.Errorf("year should end in December of the same year, got %v", end)
+	}
+}
+
+func TestPeriodBoundsDayAndMonth(t *testing.T) {
+	s, e := periodBounds("day")
+	if e.Sub(s) > 24*time.Hour {
+		t.Errorf("day window is %v", e.Sub(s))
+	}
+	s, e = periodBounds("month")
+	if s.Day() != 1 || e.Month() != s.Month() {
+		t.Errorf("month window %v .. %v", s, e)
+	}
+	if s, e := periodBounds("banana"); !s.IsZero() || !e.IsZero() {
+		t.Error("an unknown period should report zero bounds")
+	}
+}

@@ -2,6 +2,7 @@ package governor
 
 import (
 	log "log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -151,6 +152,9 @@ func (g *Governor) cmdGet(req *monolink.Request) {
 	case "DEADLINES":
 		all := g.events.List()
 		now := time.Now()
+		// Soonest first: the store keeps insertion order, which is not a
+		// useful order to read a deadline list in.
+		sort.SliceStable(all, func(i, j int) bool { return all[i].At.Before(all[j].At) })
 		var args []string
 
 		if len(msg.Args) >= 1 {
@@ -162,14 +166,20 @@ func (g *Governor) cmdGet(req *monolink.Request) {
 				g.reply(req, "ERR", "PERIOD")
 				return
 			}
+			// An explicit window means "show me what falls in it", so the
+			// visible-from rule does not apply here -- that rule exists to
+			// keep the no-argument query to what is currently on the radar.
+			// Applying both meant GET:DEADLINES:month returned nothing at
+			// all when every event was more than the default seven days
+			// out, which is exactly when you would ask.
 			for i := range all {
 				e := &all[i]
 				at := e.At
-				visibleStart := e.DeadlineVisibleStart()
-				if !at.Before(start) && !at.After(end) && !now.Before(visibleStart) && !now.After(at) {
+				if !at.Before(start) && !at.After(end) && !now.After(at) {
 					args = append(args, e.WireString())
 				}
 			}
+
 			log.Debug("GET DEADLINES", "window", msg.Args[0], "start", start.Format("2006-01-02"), "end", end.Format("2006-01-02"), "count", len(args), "from", msg.From)
 		} else {
 			// No window arg: return events that are currently in their visible window (visibleStart <= now <= At).
