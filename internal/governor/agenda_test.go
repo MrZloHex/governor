@@ -95,7 +95,9 @@ func TestAgendaDeadlines(t *testing.T) {
 		titles = append(titles, f[1])
 	}
 
-	want := []string{"Today", "Soon", "Early"} // soonest first
+	// Everything still ahead, soonest first -- the visible-from rule does
+	// not apply on the morning card, so "Far" appears too.
+	want := []string{"Today", "Soon", "Early", "Far"}
 	if len(titles) != len(want) {
 		t.Fatalf("got %v, want %v", titles, want)
 	}
@@ -160,5 +162,50 @@ func TestPeriodBoundsDayAndMonth(t *testing.T) {
 	}
 	if s, e := periodBounds("banana"); !s.IsZero() || !e.IsZero() {
 		t.Error("an unknown period should report zero bounds")
+	}
+}
+
+// A deadline further out than the default visible window still has to
+// reach the morning card: with the seven-day default, a resit nine days
+// away showed nothing at all, which is exactly when the reminder matters.
+func TestAgendaShowsDeadlinesBeyondVisibleWindow(t *testing.T) {
+	day := time.Date(2026, 9, 10, 3, 0, 0, 0, time.Local)
+	g := testGovernor(t, nil, []Event{
+		{ID: "resit1", Title: "Пересдача ГОС", At: time.Date(2026, 9, 19, 13, 55, 0, 0, time.Local)},
+		{ID: "resit2", Title: "Пересдача Китайский", At: time.Date(2026, 9, 23, 15, 30, 0, 0, time.Local)},
+	})
+
+	_, _, entries := g.AgendaFor(day)
+	if len(entries) != 2 {
+		t.Fatalf("want both resits on the card, got %d: %v", len(entries), entries)
+	}
+	f := strings.Split(entries[0], "|")
+	if f[1] != "Пересдача ГОС" || f[3] != "9" {
+		t.Errorf("first entry wrong: %v", f)
+	}
+	f = strings.Split(entries[1], "|")
+	if f[3] != "13" {
+		t.Errorf("second entry days remaining = %q, want 13", f[3])
+	}
+}
+
+func TestAgendaCapsDeadlines(t *testing.T) {
+	day := time.Date(2026, 9, 10, 3, 0, 0, 0, time.Local)
+	var evs []Event
+	for i := 0; i < AgendaMaxDeadlines+4; i++ {
+		evs = append(evs, Event{
+			ID:    itoa(i),
+			Title: "E" + itoa(i),
+			At:    day.AddDate(0, 0, i+1),
+		})
+	}
+	g := testGovernor(t, nil, evs)
+	_, _, entries := g.AgendaFor(day)
+	if len(entries) != AgendaMaxDeadlines {
+		t.Fatalf("want %d entries, got %d", AgendaMaxDeadlines, len(entries))
+	}
+	// And they must be the soonest ones.
+	if !strings.Contains(entries[0], "|E0|") {
+		t.Errorf("first entry should be the soonest: %q", entries[0])
 	}
 }

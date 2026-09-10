@@ -17,6 +17,10 @@ const (
 // date argument and inside DUE entries.
 const agendaDateFmt = "2006.01.02"
 
+// AgendaMaxDeadlines caps how many upcoming deadlines reach the morning
+// card, so it stays something you can read at breakfast.
+const AgendaMaxDeadlines = 5
+
 // weekdayShort maps a Go weekday onto the three-letter form used in the
 // schedule CSV.
 var weekdayShort = [...]string{
@@ -65,19 +69,27 @@ func (g *Governor) AgendaFor(day time.Time) (date string, weekday string, entrie
 		}, slotSep))
 	}
 
-	// Deadlines visible on this day, soonest first.
+	// Everything still ahead, soonest first, capped so the card stays
+	// short.
+	//
+	// Deliberately not filtered by DeadlineVisibleStart. That rule exists
+	// for the open-ended "what is on my radar" query, and on a morning
+	// card it does the wrong thing: with the default seven days, a resit
+	// nine days out shows nothing at all, which is precisely when you want
+	// the reminder. Taking the soonest few instead means distant items
+	// only appear when there is nothing nearer.
 	midnight := startOfDay(day)
 	var due []Event
 	for _, e := range g.events.List() {
 		if e.At.Before(midnight) {
 			continue // already passed
 		}
-		if day.Before(e.DeadlineVisibleStart()) {
-			continue // not yet in its visible window
-		}
 		due = append(due, e)
 	}
 	sort.SliceStable(due, func(i, j int) bool { return due[i].At.Before(due[j].At) })
+	if len(due) > AgendaMaxDeadlines {
+		due = due[:AgendaMaxDeadlines]
+	}
 	for _, e := range due {
 		entries = append(entries, strings.Join([]string{
 			AgendaDue,
