@@ -17,6 +17,8 @@ type Governor struct {
 	schedule       []Slot
 	events         *eventStore
 	deadlinePeriod time.Duration
+
+	nextDeadline *monolink.Property // what governor owes the bus, SPEC §28
 }
 
 func New(client *monolink.Client, schedulePath, eventsPath string) (*Governor, error) {
@@ -41,7 +43,44 @@ func New(client *monolink.Client, schedulePath, eventsPath string) (*Governor, e
 		log.Debug("schedule loaded", "path", schedulePath, "slots", len(slots))
 	}
 
+	g.register()
+	go func() {
+		// Deadlines pass with time alone; nothing else would move NEXT.DEADLINE.
+		for range time.Tick(time.Minute) {
+			g.announce()
+		}
+	}()
 	return g, nil
+}
+
+// register describes governor to the bus: REG on every connect, then a PUB
+// whenever a property moves. Before the first Connect, so that connect
+// announces it. TASKS.OPEN waits for tasks to exist.
+func (g *Governor) register() {
+	node := monolink.NewNode(g.client, monolink.NodeInfo{
+		Class: monolink.ClassNode, Product: "governor", Version: monolink.BuildVersion(),
+	})
+	g.nextDeadline = node.Prop("NEXT.DEADLINE", monolink.Time(), "the soonest event still ahead; empty when none is")
+	g.announce()
+}
+
+// announce sets NEXT.DEADLINE to the soonest event still ahead.
+func (g *Governor) announce() {
+	if g.nextDeadline == nil {
+		return
+	}
+	now := time.Now()
+	var next time.Time
+	for _, e := range g.events.List() {
+		if e.At.After(now) && (next.IsZero() || e.At.Before(next)) {
+			next = e.At
+		}
+	}
+	if next.IsZero() {
+		g.nextDeadline.Set("")
+	} else {
+		g.nextDeadline.Set(next.Format(time.RFC3339))
+	}
 }
 
 func (g *Governor) reply(req *monolink.Request, verb, noun string, args ...string) {
@@ -254,6 +293,7 @@ func (g *Governor) cmdNew(req *monolink.Request) {
 		}
 		log.Info("NEW EVENT", "id", id, "title", title, "at", at.Format("2006-01-02 15:04"), "from", msg.From)
 		g.reply(req, "OK", "EVENT", id)
+		g.announce()
 	default:
 		log.Warn("UNKNOWN NOUN", "noun", msg.Noun, "from", msg.From)
 		g.reply(req, "ERR", "NOUN")
@@ -276,6 +316,7 @@ func (g *Governor) cmdStop(req *monolink.Request) {
 		}
 		log.Info("STOP EVENT", "id", id, "from", msg.From)
 		g.reply(req, "OK", "EVENT", id)
+		g.announce()
 	default:
 		log.Warn("UNKNOWN NOUN", "noun", msg.Noun, "from", msg.From)
 		g.reply(req, "ERR", "NOUN")
